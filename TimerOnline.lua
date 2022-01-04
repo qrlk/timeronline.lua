@@ -508,7 +508,6 @@ function time()
         wait(1000)
         nowTime = os.date("%H:%M:%S", os.time())
         if sampGetGamestate() == 3 then
-            print(hwnd == ffi.C.GetActiveWindow(), hwnd, ffi.C.GetActiveWindow())
             -- Игровой статус равен "Подключён к серверу" (Что бы онлайн считало только, когда, мы подключены к серверу)
             if hwnd == ffi.C.GetActiveWindow() then
                 sesOnline.v = sesOnline.v + 1
