@@ -526,13 +526,13 @@ function time()
             sesAfk.v = sesFull.v - sesOnline.v - sesNotFocused.v              -- АФК за сессию
 
             cfg.onDay.full = dayFull.v + sesFull.v            -- Общий онлайн за день
-            cfg.onDay.afk = cfg.onDay.full - cfg.onDay.online      -- АФК за день
+            cfg.onDay.afk = cfg.onDay.full - cfg.onDay.online - cfg.onDay.notFocused      -- АФК за день
 
             cfg.onWeek.full = weekFull.v + sesFull.v          -- Общий онлайн за неделю
-            cfg.onWeek.afk = cfg.onWeek.full - cfg.onWeek.online    -- АФК за неделю
+            cfg.onWeek.afk = cfg.onWeek.full - cfg.onWeek.online - cfg.onWeek.notFocused    -- АФК за неделю
 
             cfg.onAll.full = allFull.v + sesFull.v          -- Общий онлайн за неделю
-            cfg.onAll.afk = cfg.onAll.full - cfg.onAll.online    -- АФК за неделю
+            cfg.onAll.afk = cfg.onAll.full - cfg.onAll.online - cfg.onAll.notFocused    -- АФК за неделю
 
             connectingTime = 0
         else
