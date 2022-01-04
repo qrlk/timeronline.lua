@@ -167,7 +167,7 @@ function main()
     end
 
     if not doesFileExist('moonloader/config/TimerOnline.ini') then
-        if loadAndSave() then
+        if inicfg.save(cfg, 'TimerOnline.ini') then
             sampfuncsLog(tag .. 'Создан файл конфигурации: TimerOnline.ini')
         end
     end
