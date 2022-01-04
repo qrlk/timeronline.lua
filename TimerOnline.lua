@@ -1,3 +1,4 @@
+-- https://github.com/qrlk/timeronline.lua - slighty improved version
 script_author('Cosmo')
 script_description('ShitCode Prodakshen')
 local imgui = require 'imgui'
