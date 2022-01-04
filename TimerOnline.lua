@@ -318,7 +318,7 @@ function imgui.OnDrawFrame()
             Radio['sesOnline'] = not Radio['sesOnline'];
             cfg.statTimers.sesOnline = Radio['sesOnline']
         end
-        if imgui.RadioButton(u8 'Онлайн за сессию', Radio['sesNotFocused']) then
+        if imgui.RadioButton(u8 'Не в фокусе за сессию', Radio['sesNotFocused']) then
             Radio['sesNotFocused'] = not Radio['sesNotFocused'];
             cfg.statTimers.sesNotFocused = Radio['sesNotFocused']
         end
@@ -338,7 +338,7 @@ function imgui.OnDrawFrame()
         end
         if imgui.RadioButton(u8 'Не в фокусе за день', Radio['dayNotFocused']) then
             Radio['dayNotFocused'] = not Radio['dayNotFocused'];
-            cfg.statTimers.sesOnline = Radio['dayNotFocused']
+            cfg.statTimers.dayNotFocused = Radio['dayNotFocused']
         end
         imgui.Hint(u8 'Без учёта АФК (Чистый онлайн)')
         if imgui.RadioButton(u8 'АФК за день', Radio['dayAfk']) then
@@ -356,7 +356,7 @@ function imgui.OnDrawFrame()
         end
         if imgui.RadioButton(u8 'Не в фокусе за неделю', Radio['weekNotFocused']) then
             Radio['weekNotFocused'] = not Radio['weekNotFocused'];
-            cfg.statTimers.sesOnline = Radio['weekNotFocused']
+            cfg.statTimers.weekNotFocused = Radio['weekNotFocused']
         end
         imgui.Hint(u8 'Без учёта АФК (Чистый онлайн)')
         if imgui.RadioButton(u8 'АФК за неделю', Radio['weekAfk']) then
@@ -374,7 +374,7 @@ function imgui.OnDrawFrame()
         end
         if imgui.RadioButton(u8 'Не в фокусе за всё время', Radio['allNotFocused']) then
             Radio['allNotFocused'] = not Radio['allNotFocused'];
-            cfg.statTimers.sesOnline = Radio['allNotFocused']
+            cfg.statTimers.allNotFocused = Radio['allNotFocused']
         end
         imgui.Hint(u8 'Без учёта АФК (Чистый онлайн)')
         if imgui.RadioButton(u8 'АФК за всё время', Radio['allAfk']) then
