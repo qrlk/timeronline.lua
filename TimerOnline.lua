@@ -527,13 +527,22 @@ function time()
 
             cfg.onDay.full = dayFull.v + sesFull.v            -- Общий онлайн за день
             cfg.onDay.afk = cfg.onDay.full - cfg.onDay.online - cfg.onDay.notFocused      -- АФК за день
+			if cfg.onDay.afk <= 0 then
+				cfg.onDay.afk = 0
+			end
 
             cfg.onWeek.full = weekFull.v + sesFull.v          -- Общий онлайн за неделю
             cfg.onWeek.afk = cfg.onWeek.full - cfg.onWeek.online - cfg.onWeek.notFocused    -- АФК за неделю
+			if cfg.onWeek.afk <= 0 then
+				cfg.onWeek.afk = 0
+			end
 
             cfg.onAll.full = allFull.v + sesFull.v          -- Общий онлайн за неделю
             cfg.onAll.afk = cfg.onAll.full - cfg.onAll.online - cfg.onAll.notFocused    -- АФК за неделю
-
+			if cfg.onAll.afk <= 0 then
+				cfg.onAll.afk = 0
+			end
+			
             connectingTime = 0
         else
             connectingTime = connectingTime + 1                         -- Вермя подключения к серверу
