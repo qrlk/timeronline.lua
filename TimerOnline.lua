@@ -579,6 +579,7 @@ function loadAndSave()
     if cfg.onDay.today ~= os.date("%a") then
         cfg.onDay.today = os.date("%a")
         cfg.onDay.online = 0
+        cfg.onDay.notFocused = 0
         cfg.onDay.full = 0
         cfg.onDay.afk = 0
         dayFull.v = 0
@@ -587,6 +588,7 @@ function loadAndSave()
     if cfg.onWeek.week ~= number_week() then
         cfg.onWeek.week = number_week()
         cfg.onWeek.online = 0
+        cfg.onWeek.notFocused = 0
         cfg.onWeek.full = 0
         cfg.onWeek.afk = 0
         weekFull.v = 0
