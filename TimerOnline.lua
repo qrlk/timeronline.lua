@@ -631,6 +631,9 @@ function getStrDate(unixTime)
 end
 
 function get_clock(time)
+	if time < 0 then
+		time = 0
+	end
     local timezone_offset = 86400 - os.date('%H', 0) * 3600
     if tonumber(time) >= 86400 then
         onDay = true
