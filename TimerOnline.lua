@@ -1,45 +1,36 @@
 -- https://github.com/qrlk/timeronline.lua - slighty improved version
-script_author('Cosmo')
+script_author('Cosmo', 'qrlk')
+script_version("26.06.2022")
 script_description('ShitCode Prodakshen')
 local imgui = require 'imgui'
 local inicfg = require 'inicfg'
 local se = require 'lib.samp.events'
+local memory = require 'memory'
 local encoding = require 'encoding'
 encoding.default = 'CP1251'
 u8 = encoding.UTF8
-
-local ffi = require 'ffi'
-
-ffi.cdef [[
-        typedef const char *LPSTR;
-        typedef const char* LPCSTR;
-        typedef unsigned long HANDLE;
-        typedef HANDLE HWND;
-
-        HWND GetActiveWindow(void);
-        int GetWindowTextA(HWND hWnd, LPSTR lpString,int nMaxCount);
-        int GetWindowTextLengthA(HWND hWnd);
-]]
-
-hwnd = ffi.C.GetActiveWindow();
 
 local cfg = inicfg.load({
     statTimers = {
         state = true,
         clock = true,
         sesOnline = true,
+		sesOffline = true,
         sesAfk = true,
         sesNotFocused = true,
         sesFull = true,
         dayOnline = true,
+		dayOffline = true,
         dayNotFocused = true,
         dayAfk = true,
         dayFull = true,
         weekOnline = true,
+		weekOffline = true,
         weekNotFocused = true,
         weekAfk = true,
         weekFull = true,
         allOnline = true,
+		allOffline = true,
         allNotFocused = true,
         allAfk = true,
         allFull = true,
@@ -50,21 +41,24 @@ local cfg = inicfg.load({
         online = 0,
         afk = 0,
         full = 0,
-        notFocused = 0
+        notFocused = 0,
+		offline = 0
     },
     onWeek = {
         week = 1,
         online = 0,
         afk = 0,
         full = 0,
-        notFocused = 0
+        notFocused = 0,
+		offline = 0
     },
     onAll = {
         week = 1,
         online = 0,
         afk = 0,
         full = 0,
-        notFocused = 0
+        notFocused = 0,
+		offline = 0
     },
     myWeekOnline = {
         [0] = 0,
@@ -105,7 +99,7 @@ oldCfg = deepcopy(cfg)
 
 mcx = 0x0087FF
 local sX, sY = getScreenResolution()
-local tag = '{0087FF}TimerOnline: {FFFFFF}'
+local tag = '{0087FF}TimerOnline {348cb2}v'..thisScript().version..'{0087FF}: {FFFFFF}'
 local to = imgui.ImBool(cfg.statTimers.state)
 local nowTime = os.date("%H:%M:%S", os.time())
 local settings = imgui.ImBool(false)
@@ -114,13 +108,19 @@ local pos = false
 local restart = false
 local recon = false
 
+local connected = false -- поменять на false
+
 local sesOnline = imgui.ImInt(0)
+local sesOffline = imgui.ImInt(0)
 local sesAfk = imgui.ImInt(0)
 local sesNotFocused = imgui.ImInt(0)
 local sesFull = imgui.ImInt(0)
 local dayFull = imgui.ImInt(cfg.onDay.full)
+local dayOffline = imgui.ImInt(cfg.onDay.offline)
 local weekFull = imgui.ImInt(cfg.onWeek.full)
+local weekOffline = imgui.ImInt(cfg.onWeek.offline)
 local allFull = imgui.ImInt(cfg.onAll.full)
+local allOffline = imgui.ImInt(cfg.onAll.offline)
 local sRound = imgui.ImFloat(cfg.style.round)
 
 local argbW = cfg.style.colorW
@@ -132,18 +132,22 @@ local posX, posY = cfg.pos.x, cfg.pos.y
 local Radio = {
     ['clock'] = cfg.statTimers.clock,
     ['sesOnline'] = cfg.statTimers.sesOnline,
+    ['sesOffline'] = cfg.statTimers.sesOffline,
     ['sesNotFocused'] = cfg.statTimers.sesNotFocused,
     ['sesAfk'] = cfg.statTimers.sesAfk,
     ['sesFull'] = cfg.statTimers.sesFull,
     ['dayOnline'] = cfg.statTimers.dayOnline,
+    ['dayOffline'] = cfg.statTimers.dayOffline,
     ['dayAfk'] = cfg.statTimers.dayAfk,
     ['dayNotFocused'] = cfg.statTimers.dayNotFocused,
     ['dayFull'] = cfg.statTimers.dayFull,
     ['weekOnline'] = cfg.statTimers.weekOnline,
+    ['weekOffline'] = cfg.statTimers.weekOffline,
     ['weekAfk'] = cfg.statTimers.weekAfk,
     ['weekNotFocused'] = cfg.statTimers.weekNotFocused,
     ['weekFull'] = cfg.statTimers.weekFull,
     ['allOnline'] = cfg.statTimers.allOnline,
+    ['allOffline'] = cfg.statTimers.allOffline,
     ['allAfk'] = cfg.statTimers.allAfk,
     ['allNotFocused'] = cfg.statTimers.allNotFocused,
     ['allFull'] = cfg.statTimers.allFull
@@ -188,7 +192,9 @@ function main()
         myOnline.v = not myOnline.v
     end)
 
-    lua_thread.create(time)
+    sampAddChatMessage(tag .. '/toset - настройки таймера, /online - онлайн.', mcx)
+    
+	lua_thread.create(time)
     lua_thread.create(autoSave)
 
     while true do
@@ -214,13 +220,21 @@ function imgui.OnDrawFrame()
         imgui.SetNextWindowPos(imgui.ImVec2(posX, posY), imgui.Cond.Always)
         imgui.Begin(u8 '##timer', _, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.AlwaysAutoResize + imgui.WindowFlags.NoTitleBar)
 
+
+
+		local act_ses = cfg.statTimers.sesOnline or cfg.statTimers.sesOffline or cfg.statTimers.sesNotFocused or cfg.statTimers.sesAfk or cfg.statTimers.sesFull
+		local act_day = cfg.statTimers.dayOnline or cfg.statTimers.dayOffline or cfg.statTimers.dayNotFocused or cfg.statTimers.dayAfk or cfg.statTimers.dayFull
+		local act_week = cfg.statTimers.weekOnline or cfg.statTimers.weekOffline or cfg.statTimers.weekNotFocused or cfg.statTimers.weekAfk or cfg.statTimers.weekFull
+		local act_all = cfg.statTimers.allOnline or cfg.statTimers.allOffline or cfg.statTimers.allNotFocused or cfg.statTimers.allAfk or cfg.statTimers.allFull
+		
         if cfg.statTimers.clock then
             imgui.PushFont(fsClock)
             imgui.CenterTextColoredRGB(nowTime)
             imgui.PopFont()
             imgui.SetCursorPosY(30)
             imgui.CenterTextColoredRGB(getStrDate(os.time()))
-            if cfg.statTimers.sesOnline or cfg.statTimers.sesAfk or cfg.statTimers.sesFull or cfg.statTimers.dayOnline or cfg.statTimers.dayAfk or cfg.statTimers.dayFull or cfg.statTimers.weekOnline or cfg.statTimers.weekAfk or cfg.statTimers.weekFull then
+			
+            if act_ses or act_day or act_week or act_all then
                 imgui.Separator()
             end
         end
@@ -229,22 +243,30 @@ function imgui.OnDrawFrame()
         if sampGetGamestate() ~= 3 then
             imgui.CenterTextColoredRGB("Подключение: " .. get_clock(connectingTime))
         else
-            imgui.CenterTextColoredRGB("СЕССИЯ")
+			
+            if act_ses then
+				imgui.CenterTextColoredRGB("СЕССИЯ")
 
-            if cfg.statTimers.sesOnline then
-                imgui.CenterTextColoredRGB("Чистый: " .. get_clock(sesOnline.v))
-            end
-            if cfg.statTimers.sesNotFocused then
-                imgui.CenterTextColoredRGB("Не в фокусе: " .. get_clock(sesNotFocused.v))
-            end
-            if cfg.statTimers.sesAfk then
-                imgui.CenterTextColoredRGB("АФК: " .. get_clock(sesAfk.v))
-            end
-            if cfg.statTimers.sesFull then
-                imgui.CenterTextColoredRGB("Онлайн: " .. get_clock(sesFull.v))
-            end
-            if cfg.statTimers.dayOnline or cfg.statTimers.dayNotFocused or cfg.statTimers.dayAfk or cfg.statTimers.dayFull then
-                imgui.NewLine()
+				if cfg.statTimers.sesOnline then
+					imgui.CenterTextColoredRGB("Чистый: " .. get_clock(sesOnline.v))
+				end
+				if cfg.statTimers.sesNotFocused then
+					imgui.CenterTextColoredRGB("Не в фокусе: " .. get_clock(sesNotFocused.v))
+				end
+				if cfg.statTimers.sesAfk then
+					imgui.CenterTextColoredRGB("АФК: " .. get_clock(sesAfk.v))
+				end
+				if cfg.statTimers.sesOffline then
+					imgui.CenterTextColoredRGB("Оффлайн: " .. get_clock(sesOffline.v))
+				end
+				if cfg.statTimers.sesFull then
+					imgui.CenterTextColoredRGB("Онлайн: " .. get_clock(sesFull.v))
+				end
+			end
+            if act_day then
+				if act_ses then
+					imgui.NewLine()
+				end
                 imgui.CenterTextColoredRGB("ДЕНЬ")
                 if cfg.statTimers.dayOnline then
                     imgui.CenterTextColoredRGB("Чистый: " .. get_clock(cfg.onDay.online))
@@ -255,12 +277,17 @@ function imgui.OnDrawFrame()
                 if cfg.statTimers.dayAfk then
                     imgui.CenterTextColoredRGB("АФК: " .. get_clock(cfg.onDay.afk))
                 end
+				if cfg.statTimers.dayOffline then
+					imgui.CenterTextColoredRGB("Оффлайн: " .. get_clock(cfg.onDay.offline))
+				end
                 if cfg.statTimers.dayFull then
                     imgui.CenterTextColoredRGB("Онлайн: " .. get_clock(cfg.onDay.full))
                 end
             end
-            if cfg.statTimers.weekOnline or cfg.statTimers.weekNotFocused or cfg.statTimers.weekAfk or cfg.statTimers.weekFull then
-                imgui.NewLine()
+            if act_week then
+				if act_ses or act_day then
+					imgui.NewLine()
+				end
                 imgui.CenterTextColoredRGB("НЕДЕЛЯ")
 
                 if cfg.statTimers.weekOnline then
@@ -272,12 +299,17 @@ function imgui.OnDrawFrame()
                 if cfg.statTimers.weekAfk then
                     imgui.CenterTextColoredRGB("АФК: " .. get_clock(cfg.onWeek.afk))
                 end
+				if cfg.statTimers.weekOffline then
+					imgui.CenterTextColoredRGB("Оффлайн: " .. get_clock(cfg.onWeek.offline))
+				end
                 if cfg.statTimers.weekFull then
                     imgui.CenterTextColoredRGB("Онлайн: " .. get_clock(cfg.onWeek.full))
                 end
             end
-            if cfg.statTimers.allOnline or cfg.statTimers.allNotFocused or cfg.statTimers.allAfk or cfg.statTimers.allFull then
-                imgui.NewLine()
+            if act_all then
+				if act_ses or act_day or act_week then
+					imgui.NewLine()
+				end
                 imgui.CenterTextColoredRGB("ВСЁ ВРЕМЯ")
 
                 if cfg.statTimers.allOnline then
@@ -287,8 +319,11 @@ function imgui.OnDrawFrame()
                     imgui.CenterTextColoredRGB("Не в фокусе: " .. get_clock(cfg.onAll.notFocused))
                 end
                 if cfg.statTimers.allAfk then
-                    imgui.CenterTextColoredRGB("Афк: " .. get_clock(cfg.onAll.afk))
+                    imgui.CenterTextColoredRGB("АФК: " .. get_clock(cfg.onAll.afk))
                 end
+				if cfg.statTimers.allOffline then
+					imgui.CenterTextColoredRGB("Оффлайн: " .. get_clock(cfg.onAll.offline))
+				end
                 if cfg.statTimers.allFull then
                     imgui.CenterTextColoredRGB("Онлайн: " .. get_clock(cfg.onAll.full))
                 end
@@ -309,13 +344,13 @@ function imgui.OnDrawFrame()
         imgui.PushFont(fsClock)
         imgui.CenterTextColoredRGB('Timer Online')
         imgui.PopFont()
-        imgui.BeginChild('##RadioButtons', imgui.ImVec2(190, 480), true)
+        imgui.BeginChild('##RadioButtons', imgui.ImVec2(200, 480), true)
         if imgui.RadioButton(u8 'Текущее дата и время', Radio['clock']) then
             Radio['clock'] = not Radio['clock'];
             cfg.statTimers.clock = Radio['clock']
         end
         imgui.NewLine()
-        if imgui.RadioButton(u8 'Онлайн за сессию', Radio['sesOnline']) then
+        if imgui.RadioButton(u8 'В фокусе за сессию', Radio['sesOnline']) then
             Radio['sesOnline'] = not Radio['sesOnline'];
             cfg.statTimers.sesOnline = Radio['sesOnline']
         end
@@ -323,17 +358,21 @@ function imgui.OnDrawFrame()
             Radio['sesNotFocused'] = not Radio['sesNotFocused'];
             cfg.statTimers.sesNotFocused = Radio['sesNotFocused']
         end
-        imgui.Hint(u8 'Без учёта АФК (Чистый онлайн)')
+        imgui.Hint(u8 'Без учёта АФК (В фокусе)')
         if imgui.RadioButton(u8 'AFK за сессию', Radio['sesAfk']) then
             Radio['sesAfk'] = not Radio['sesAfk'];
             cfg.statTimers.sesAfk = Radio['sesAfk']
         end
-        if imgui.RadioButton(u8 'Общий за сессию', Radio['sesFull']) then
+        if imgui.RadioButton(u8 'Оффлайн за сессию', Radio['sesOffline']) then
+            Radio['sesOffline'] = not Radio['sesOffline'];
+            cfg.statTimers.sesOffline = Radio['sesOffline']
+        end
+        if imgui.RadioButton(u8 'Онлайн за сессию', Radio['sesFull']) then
             Radio['sesFull'] = not Radio['sesFull'];
             cfg.statTimers.sesFull = Radio['sesFull']
         end
         imgui.NewLine()
-        if imgui.RadioButton(u8 'Онлайн за день', Radio['dayOnline']) then
+        if imgui.RadioButton(u8 'В фокусе за день', Radio['dayOnline']) then
             Radio['dayOnline'] = not Radio['dayOnline'];
             cfg.statTimers.dayOnline = Radio['dayOnline']
         end
@@ -341,17 +380,21 @@ function imgui.OnDrawFrame()
             Radio['dayNotFocused'] = not Radio['dayNotFocused'];
             cfg.statTimers.dayNotFocused = Radio['dayNotFocused']
         end
-        imgui.Hint(u8 'Без учёта АФК (Чистый онлайн)')
+        imgui.Hint(u8 'Без учёта АФК (В фокусе)')
         if imgui.RadioButton(u8 'АФК за день', Radio['dayAfk']) then
             Radio['dayAfk'] = not Radio['dayAfk'];
             cfg.statTimers.dayAfk = Radio['dayAfk']
         end
-        if imgui.RadioButton(u8 'Общий за день', Radio['dayFull']) then
+        if imgui.RadioButton(u8 'Оффлайн за день', Radio['dayOffline']) then
+            Radio['dayOffline'] = not Radio['dayOffline'];
+            cfg.statTimers.dayOffline = Radio['dayOffline']
+        end
+        if imgui.RadioButton(u8 'Онлайн за день', Radio['dayFull']) then
             Radio['dayFull'] = not Radio['dayFull'];
             cfg.statTimers.dayFull = Radio['dayFull']
         end
         imgui.NewLine()
-        if imgui.RadioButton(u8 'Онлайн за неделю', Radio['weekOnline']) then
+        if imgui.RadioButton(u8 'В фокусе за неделю', Radio['weekOnline']) then
             Radio['weekOnline'] = not Radio['weekOnline'];
             cfg.statTimers.weekOnline = Radio['weekOnline']
         end
@@ -359,17 +402,21 @@ function imgui.OnDrawFrame()
             Radio['weekNotFocused'] = not Radio['weekNotFocused'];
             cfg.statTimers.weekNotFocused = Radio['weekNotFocused']
         end
-        imgui.Hint(u8 'Без учёта АФК (Чистый онлайн)')
+        imgui.Hint(u8 'Без учёта АФК (В фокусе)')
         if imgui.RadioButton(u8 'АФК за неделю', Radio['weekAfk']) then
             Radio['weekAfk'] = not Radio['weekAfk'];
             cfg.statTimers.weekAfk = Radio['weekAfk']
         end
-        if imgui.RadioButton(u8 'Общий за неделю', Radio['weekFull']) then
+        if imgui.RadioButton(u8 'Оффлайн за неделю', Radio['weekOffline']) then
+            Radio['weekOffline'] = not Radio['weekOffline'];
+            cfg.statTimers.weekOffline = Radio['weekOffline']
+        end
+        if imgui.RadioButton(u8 'Онлайн за неделю', Radio['weekFull']) then
             Radio['weekFull'] = not Radio['weekFull'];
             cfg.statTimers.weekFull = Radio['weekFull']
         end
         imgui.NewLine()
-        if imgui.RadioButton(u8 'Онлайн за всё время', Radio['allOnline']) then
+        if imgui.RadioButton(u8 'В фокусе за всё время', Radio['allOnline']) then
             Radio['allOnline'] = not Radio['allOnline'];
             cfg.statTimers.allOnline = Radio['allOnline']
         end
@@ -377,12 +424,16 @@ function imgui.OnDrawFrame()
             Radio['allNotFocused'] = not Radio['allNotFocused'];
             cfg.statTimers.allNotFocused = Radio['allNotFocused']
         end
-        imgui.Hint(u8 'Без учёта АФК (Чистый онлайн)')
+        imgui.Hint(u8 'Без учёта АФК (В фокусе)')
         if imgui.RadioButton(u8 'АФК за всё время', Radio['allAfk']) then
             Radio['allAfk'] = not Radio['allAfk'];
             cfg.statTimers.allAfk = Radio['allAfk']
         end
-        if imgui.RadioButton(u8 'Общий за всё время', Radio['allFull']) then
+        if imgui.RadioButton(u8 'Оффлайн за всё время', Radio['allOffline']) then
+            Radio['allOffline'] = not Radio['allOffline'];
+            cfg.statTimers.allOffline = Radio['allOffline']
+        end
+        if imgui.RadioButton(u8 'Онлайн за всё время', Radio['allFull']) then
             Radio['allFull'] = not Radio['allFull'];
             cfg.statTimers.allFull = Radio['allFull']
         end
@@ -502,49 +553,62 @@ function se.onTogglePlayerSpectating(state)
     recon = state
 end -- если вы админ, то в реконе скрипт будет отключать табличку, сделал чисто для себя, если надо - удалите
 
+function se.onConnectionRequestAccepted()
+    connected = true
+end
+
+function se.onConnectionClosed()
+    connected = false
+end
+
 function time()
-    startTime = os.time()                                               -- "Точка отсчёта"
+    startTime = os.time()  -- "Точка отсчёта"
+	local realStartTime = os.time()
     connectingTime = 0
     while true do
         wait(1000)
+		local asodkas, licenseid = sampGetPlayerIdByCharHandle(PLAYER_PED)
+		
         nowTime = os.date("%H:%M:%S", os.time())
-        if sampGetGamestate() == 3 then
-            -- Игровой статус равен "Подключён к серверу" (Что бы онлайн считало только, когда, мы подключены к серверу)
-            if hwnd == ffi.C.GetActiveWindow() then
-                sesOnline.v = sesOnline.v + 1
-                cfg.onDay.online = cfg.onDay.online + 1          -- Онлайн за день без учёта АФК
-                cfg.onWeek.online = cfg.onWeek.online + 1          -- Онлайн за неделю без учёта АФК
-                cfg.onAll.online = cfg.onAll.online + 1          -- Онлайн за неделю без учёта АФК
-            else
-                sesNotFocused.v = sesNotFocused.v + 1
-                cfg.onDay.notFocused = cfg.onDay.notFocused + 1
-                cfg.onWeek.notFocused = cfg.onWeek.notFocused + 1
-                cfg.onAll.notFocused = cfg.onAll.notFocused + 1
-            end
-
-            sesFull.v = os.time() - startTime              -- Общий онлайн за сессию
-            sesAfk.v = sesFull.v - sesOnline.v - sesNotFocused.v              -- АФК за сессию
+		if not connected then
+			sesOffline.v = os.time() - realStartTime - sesFull.v
+			cfg.onDay.offline = dayOffline.v + sesOffline.v
+			cfg.onWeek.offline = weekOffline.v + sesOffline.v
+			cfg.onAll.offline = allOffline.v + sesOffline.v	
+		end
+        if sampGetGamestate() == 3 and connected then
+			if isGameWindowForeground() then
+				sesOnline.v = sesOnline.v + 1
+				cfg.onDay.online = cfg.onDay.online + 1          -- Онлайн за день без учёта АФК
+				cfg.onWeek.online = cfg.onWeek.online + 1          -- Онлайн за неделю без учёта АФК
+				cfg.onAll.online = cfg.onAll.online + 1          -- Онлайн за неделю без учёта АФК
+			else
+				-- no afk
+				if memory.getuint8(7634870) == 0 then
+					sesNotFocused.v = sesNotFocused.v + 1
+					cfg.onDay.notFocused = cfg.onDay.notFocused + 1
+					cfg.onWeek.notFocused = cfg.onWeek.notFocused + 1
+					cfg.onAll.notFocused = cfg.onAll.notFocused + 1
+				end
+			
+			end
+            
+            sesFull.v = os.time() - startTime
+			sesAfk.v = sesFull.v - sesOnline.v - sesNotFocused.v	
 
             cfg.onDay.full = dayFull.v + sesFull.v            -- Общий онлайн за день
             cfg.onDay.afk = cfg.onDay.full - cfg.onDay.online - cfg.onDay.notFocused      -- АФК за день
-			if cfg.onDay.afk <= 0 then
-				cfg.onDay.afk = 0
-			end
 
-            cfg.onWeek.full = weekFull.v + sesFull.v          -- Общий онлайн за неделю
+            cfg.onWeek.full = weekFull.v + sesFull.v   
+
             cfg.onWeek.afk = cfg.onWeek.full - cfg.onWeek.online - cfg.onWeek.notFocused    -- АФК за неделю
-			if cfg.onWeek.afk <= 0 then
-				cfg.onWeek.afk = 0
-			end
 
             cfg.onAll.full = allFull.v + sesFull.v          -- Общий онлайн за неделю
-            cfg.onAll.afk = cfg.onAll.full - cfg.onAll.online - cfg.onAll.notFocused    -- АФК за неделю
-			if cfg.onAll.afk <= 0 then
-				cfg.onAll.afk = 0
-			end
-			
+          
+			cfg.onAll.afk = cfg.onAll.full - cfg.onAll.online - cfg.onAll.notFocused    -- АФК за неделю
+
             connectingTime = 0
-        else
+        elseif sampGetGamestate() ~= 3 then
             connectingTime = connectingTime + 1                         -- Вермя подключения к серверу
             startTime = startTime + 1                  -- Смещение начала отсчета таймеров
         end
@@ -562,32 +626,38 @@ function loadAndSave()
     local curCfg = inicfg.load({}, "TimerOnline")
 
     cfg.onDay.online = curCfg.onDay.online + cfg.onDay.online - oldCfg.onDay.online
+    cfg.onDay.offline = curCfg.onDay.offline + cfg.onDay.offline - oldCfg.onDay.offline
     cfg.onDay.afk = curCfg.onDay.afk + cfg.onDay.afk - oldCfg.onDay.afk
     cfg.onDay.full = curCfg.onDay.full + cfg.onDay.full - oldCfg.onDay.full
     cfg.onDay.notFocused = curCfg.onDay.notFocused + cfg.onDay.notFocused - oldCfg.onDay.notFocused
 
     cfg.onWeek.online = curCfg.onWeek.online + cfg.onWeek.online - oldCfg.onWeek.online
+    cfg.onWeek.offline = curCfg.onWeek.offline + cfg.onWeek.offline - oldCfg.onWeek.offline
     cfg.onWeek.afk = curCfg.onWeek.afk + cfg.onWeek.afk - oldCfg.onWeek.afk
     cfg.onWeek.full = curCfg.onWeek.full + cfg.onWeek.full - oldCfg.onWeek.full
     cfg.onWeek.notFocused = curCfg.onWeek.notFocused + cfg.onWeek.notFocused - oldCfg.onWeek.notFocused
 
     cfg.onAll.online = curCfg.onAll.online + cfg.onAll.online - oldCfg.onAll.online
+    cfg.onAll.offline = curCfg.onAll.offline + cfg.onAll.offline - oldCfg.onAll.offline
     cfg.onAll.afk = curCfg.onAll.afk + cfg.onAll.afk - oldCfg.onAll.afk
     cfg.onAll.full = curCfg.onAll.full + cfg.onAll.full - oldCfg.onAll.full
     cfg.onAll.notFocused = curCfg.onAll.notFocused + cfg.onAll.notFocused - oldCfg.onAll.notFocused
 
-    if cfg.onDay.today ~= os.date("%a") then
+
+    if cfg.onDay.today ~= os.date("%a") and tonumber(os.date("%H")) >= 5 then
         cfg.onDay.today = os.date("%a")
         cfg.onDay.online = 0
+        cfg.onDay.offline = 0
         cfg.onDay.notFocused = 0
         cfg.onDay.full = 0
         cfg.onDay.afk = 0
         dayFull.v = 0
     end
 
-    if cfg.onWeek.week ~= number_week() then
+    if cfg.onWeek.week ~= number_week() and tonumber(os.date("%H")) >= 5 then
         cfg.onWeek.week = number_week()
         cfg.onWeek.online = 0
+        cfg.onWeek.offline = 0
         cfg.onWeek.notFocused = 0
         cfg.onWeek.full = 0
         cfg.onWeek.afk = 0
