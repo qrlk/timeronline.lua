@@ -566,6 +566,10 @@ function se.onConnectionClosed()
     connected = false
 end
 
+function se.onConnectionLost()
+    connected = false
+end
+
 function time()
     startTime = os.time()  -- "Точка отсчёта"
     local realStartTime = os.time()
