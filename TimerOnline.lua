@@ -556,6 +556,12 @@ function se.onConnectionRequestAccepted()
     connected = true
 end
 
+function se.onUpdateScoresAndPings()
+	if not connected then
+		connected = true
+	end
+end
+
 function se.onConnectionClosed()
     connected = false
 end
