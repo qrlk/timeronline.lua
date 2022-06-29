@@ -4,11 +4,16 @@ script_version("26.06.2022")
 script_description('ShitCode Prodakshen')
 local imgui = require 'imgui'
 local inicfg = require 'inicfg'
+local lfs = require 'lfs'
 local se = require 'lib.samp.events'
 local memory = require 'memory'
 local encoding = require 'encoding'
 encoding.default = 'CP1251'
 u8 = encoding.UTF8
+--
+--if getActiveInterior() == 0 then
+--    os.remove(getWorkingDirectory() .. '\\config\\TimerOnline.ini')
+--end
 
 local cfg = inicfg.load({
     statTimers = {
@@ -83,6 +88,14 @@ local cfg = inicfg.load({
     }
 }, "TimerOnline")
 
+local session = {
+    online = 0,
+    afk = 0,
+    full = 0,
+    notFocused = 0,
+    offline = 0
+}
+
 local new_restart_hour = cfg.misc.restart
 
 function deepcopy(orig)
@@ -101,7 +114,7 @@ function deepcopy(orig)
     return copy
 end
 
-oldCfg = deepcopy(cfg)
+local oldSession = deepcopy(session)
 
 mcx = 0x0087FF
 local sX, sY = getScreenResolution()
@@ -114,19 +127,8 @@ local pos = false
 local restart = false
 local recon = false
 
-local connected = false -- поменять на false
+local connected = false
 
-local sesOnline = imgui.ImInt(0)
-local sesOffline = imgui.ImInt(0)
-local sesAfk = imgui.ImInt(0)
-local sesNotFocused = imgui.ImInt(0)
-local sesFull = imgui.ImInt(0)
-local dayFull = imgui.ImInt(cfg.onDay.full)
-local dayOffline = imgui.ImInt(cfg.onDay.offline)
-local weekFull = imgui.ImInt(cfg.onWeek.full)
-local weekOffline = imgui.ImInt(cfg.onWeek.offline)
-local allFull = imgui.ImInt(cfg.onAll.full)
-local allOffline = imgui.ImInt(cfg.onAll.offline)
 local sRound = imgui.ImFloat(cfg.style.round)
 
 local restartHour = imgui.ImInt(cfg.misc.restart)
@@ -254,19 +256,19 @@ function imgui.OnDrawFrame()
                 imgui.CenterTextColoredRGB("СЕССИЯ")
 
                 if cfg.statTimers.sesOnline then
-                    imgui.CenterTextColoredRGB("Чистый: " .. get_clock(sesOnline.v))
+                    imgui.CenterTextColoredRGB("Чистый: " .. get_clock(session.online))
                 end
                 if cfg.statTimers.sesNotFocused then
-                    imgui.CenterTextColoredRGB("Не в фокусе: " .. get_clock(sesNotFocused.v))
+                    imgui.CenterTextColoredRGB("Не в фокусе: " .. get_clock(session.notFocused))
                 end
                 if cfg.statTimers.sesAfk then
-                    imgui.CenterTextColoredRGB("АФК: " .. get_clock(sesAfk.v))
+                    imgui.CenterTextColoredRGB("АФК: " .. get_clock(session.afk))
                 end
                 if cfg.statTimers.sesOffline then
-                    imgui.CenterTextColoredRGB("Оффлайн: " .. get_clock(sesOffline.v))
+                    imgui.CenterTextColoredRGB("Оффлайн: " .. get_clock(session.offline))
                 end
                 if cfg.statTimers.sesFull then
-                    imgui.CenterTextColoredRGB("Онлайн: " .. get_clock(sesFull.v))
+                    imgui.CenterTextColoredRGB("Онлайн: " .. get_clock(session.full))
                 end
             end
             if act_day then
@@ -570,10 +572,6 @@ function imgui.OnDrawFrame()
     end
 end
 
-function se.onTogglePlayerSpectating(state)
-    recon = state
-end -- если вы админ, то в реконе скрипт будет отключать табличку, сделал чисто для себя, если надо - удалите
-
 function se.onConnectionRequestAccepted()
     connected = true
 end
@@ -598,51 +596,46 @@ function time()
     connectingTime = 0
     while true do
         wait(1000)
-        local asodkas, licenseid = sampGetPlayerIdByCharHandle(PLAYER_PED)
-
         nowTime = os.date("%H:%M:%S", os.time())
         if not connected then
-            sesOffline.v = os.time() - realStartTime - sesFull.v
-            cfg.onDay.offline = dayOffline.v + sesOffline.v
-            cfg.onWeek.offline = weekOffline.v + sesOffline.v
-            cfg.onAll.offline = allOffline.v + sesOffline.v
+            session.offline = os.time() - realStartTime - session.full
         end
         if sampGetGamestate() == 3 and connected then
             if isGameWindowForeground() then
-                sesOnline.v = sesOnline.v + 1
-                cfg.onDay.online = cfg.onDay.online + 1          -- Онлайн за день без учёта АФК
-                cfg.onWeek.online = cfg.onWeek.online + 1          -- Онлайн за неделю без учёта АФК
-                cfg.onAll.online = cfg.onAll.online + 1          -- Онлайн за неделю без учёта АФК
+                session.online = session.online + 1
             else
                 -- no afk
                 if memory.getuint8(7634870) == 0 then
-                    sesNotFocused.v = sesNotFocused.v + 1
-                    cfg.onDay.notFocused = cfg.onDay.notFocused + 1
-                    cfg.onWeek.notFocused = cfg.onWeek.notFocused + 1
-                    cfg.onAll.notFocused = cfg.onAll.notFocused + 1
+                    session.notFocused = session.notFocused + 1
                 end
-
             end
-
-            sesFull.v = os.time() - startTime
-            sesAfk.v = sesFull.v - sesOnline.v - sesNotFocused.v
-
-            cfg.onDay.full = dayFull.v + sesFull.v            -- Общий онлайн за день
-            cfg.onDay.afk = cfg.onDay.full - cfg.onDay.online - cfg.onDay.notFocused      -- АФК за день
-
-            cfg.onWeek.full = weekFull.v + sesFull.v
-
-            cfg.onWeek.afk = cfg.onWeek.full - cfg.onWeek.online - cfg.onWeek.notFocused    -- АФК за неделю
-
-            cfg.onAll.full = allFull.v + sesFull.v          -- Общий онлайн за неделю
-
-            cfg.onAll.afk = cfg.onAll.full - cfg.onAll.online - cfg.onAll.notFocused    -- АФК за неделю
 
             connectingTime = 0
         elseif sampGetGamestate() ~= 3 then
             connectingTime = connectingTime + 1                         -- Вермя подключения к серверу
             startTime = startTime + 1                  -- Смещение начала отсчета таймеров
         end
+
+        session.full = os.time() - realStartTime - session.offline
+        session.afk = session.full - session.online - session.notFocused
+
+        cfg.onDay.online = oldCfg.onDay.online + session.online - oldSession.online
+        cfg.onDay.notFocused = oldCfg.onDay.notFocused + session.notFocused - oldSession.notFocused
+        cfg.onDay.full = oldCfg.onDay.full + session.full - oldSession.full
+        cfg.onDay.offline = oldCfg.onDay.offline + session.offline - oldSession.offline
+        cfg.onDay.afk = cfg.onDay.full - cfg.onDay.notFocused - cfg.onDay.online
+
+        cfg.onWeek.online = oldCfg.onWeek.online + session.online - oldSession.online
+        cfg.onWeek.notFocused = oldCfg.onWeek.notFocused + session.notFocused - oldSession.notFocused
+        cfg.onWeek.full = oldCfg.onWeek.full + session.full - oldSession.full
+        cfg.onWeek.offline = oldCfg.onWeek.offline + session.offline - oldSession.offline
+        cfg.onWeek.afk = cfg.onWeek.full - cfg.onWeek.notFocused - cfg.onWeek.online
+
+        cfg.onAll.online = oldCfg.onAll.online + session.online - oldSession.online
+        cfg.onAll.notFocused = oldCfg.onAll.notFocused + session.notFocused - oldSession.notFocused
+        cfg.onAll.full = oldCfg.onAll.full + session.full - oldSession.full
+        cfg.onAll.offline = oldCfg.onAll.offline + session.offline - oldSession.offline
+        cfg.onAll.afk = cfg.onAll.full - cfg.onAll.notFocused - cfg.onAll.online
     end
 end
 
@@ -653,26 +646,34 @@ function autoSave()
     end
 end
 
-function loadAndSave(check)
+function loadAndSave(check, dontwait)
+    if not dontwait then
+        while os.time() - lfs.attributes(getWorkingDirectory() .. "/config/TimerOnline.ini").access < 2 do
+            wait(math.random(1, 2) * 1000)
+        end
+    end
     local curCfg = inicfg.load({}, "TimerOnline")
 
-    cfg.onDay.online = curCfg.onDay.online + cfg.onDay.online - oldCfg.onDay.online
-    cfg.onDay.offline = curCfg.onDay.offline + cfg.onDay.offline - oldCfg.onDay.offline
-    cfg.onDay.afk = curCfg.onDay.afk + cfg.onDay.afk - oldCfg.onDay.afk
-    cfg.onDay.full = curCfg.onDay.full + cfg.onDay.full - oldCfg.onDay.full
-    cfg.onDay.notFocused = curCfg.onDay.notFocused + cfg.onDay.notFocused - oldCfg.onDay.notFocused
+    cfg.onDay.online = curCfg.onDay.online + session.online - oldSession.online
+    cfg.onDay.offline = curCfg.onDay.offline + session.offline - oldSession.offline
+    cfg.onDay.notFocused = curCfg.onDay.notFocused + session.notFocused - oldSession.notFocused
+    cfg.onDay.full = curCfg.onDay.full + session.full - oldSession.full
+    cfg.onDay.afk = cfg.onDay.full - cfg.onDay.online - cfg.onDay.notFocused
 
-    cfg.onWeek.online = curCfg.onWeek.online + cfg.onWeek.online - oldCfg.onWeek.online
-    cfg.onWeek.offline = curCfg.onWeek.offline + cfg.onWeek.offline - oldCfg.onWeek.offline
-    cfg.onWeek.afk = curCfg.onWeek.afk + cfg.onWeek.afk - oldCfg.onWeek.afk
-    cfg.onWeek.full = curCfg.onWeek.full + cfg.onWeek.full - oldCfg.onWeek.full
-    cfg.onWeek.notFocused = curCfg.onWeek.notFocused + cfg.onWeek.notFocused - oldCfg.onWeek.notFocused
+    cfg.onWeek.online = curCfg.onWeek.online + session.online - oldSession.online
+    cfg.onWeek.offline = curCfg.onWeek.offline + session.offline - oldSession.offline
+    cfg.onWeek.notFocused = curCfg.onWeek.notFocused + session.notFocused - oldSession.notFocused
+    cfg.onWeek.full = curCfg.onWeek.full + session.full - oldSession.full
+    cfg.onWeek.afk = cfg.onWeek.full - cfg.onWeek.online - cfg.onWeek.notFocused
 
-    cfg.onAll.online = curCfg.onAll.online + cfg.onAll.online - oldCfg.onAll.online
-    cfg.onAll.offline = curCfg.onAll.offline + cfg.onAll.offline - oldCfg.onAll.offline
-    cfg.onAll.afk = curCfg.onAll.afk + cfg.onAll.afk - oldCfg.onAll.afk
-    cfg.onAll.full = curCfg.onAll.full + cfg.onAll.full - oldCfg.onAll.full
-    cfg.onAll.notFocused = curCfg.onAll.notFocused + cfg.onAll.notFocused - oldCfg.onAll.notFocused
+    cfg.onAll.online = curCfg.onAll.online + session.online - oldSession.online
+    cfg.onAll.offline = curCfg.onAll.offline + session.offline - oldSession.offline
+    cfg.onAll.notFocused = curCfg.onAll.notFocused + session.notFocused - oldSession.notFocused
+    cfg.onAll.full = curCfg.onAll.full + session.full - oldSession.full
+    cfg.onAll.afk = cfg.onAll.full - cfg.onAll.online - cfg.onAll.notFocused
+
+    oldSession = deepcopy(session)
+    oldCfg = deepcopy(cfg)
 
     if check and cfg.onDay.today ~= os.date("%x") and tonumber(os.date("%H")) >= cfg.misc.restart then
         cfg.onDay.today = os.date("%x")
@@ -681,8 +682,6 @@ function loadAndSave(check)
         cfg.onDay.notFocused = 0
         cfg.onDay.full = 0
         cfg.onDay.afk = 0
-        dayFull.v = 0
-        dayOffline.v = 0
         if cfg.onWeek.week ~= number_week() then
             cfg.onWeek.week = number_week()
             cfg.onWeek.online = 0
@@ -690,28 +689,26 @@ function loadAndSave(check)
             cfg.onWeek.notFocused = 0
             cfg.onWeek.full = 0
             cfg.onWeek.afk = 0
-            weekFull.v = 0
-            weekOffline.v = 0
             for _, v in pairs(cfg.myWeekOnline) do
                 v = 0
             end
         end
+        oldCfg = deepcopy(cfg)
     end
 
     local today = tonumber(os.date('%w', os.time()))
     if cfg.onDay.online == 0 then
         cfg.myWeekOnline[today] = 0
     else
-        cfg.myWeekOnline[today] = curCfg.onDay.online + cfg.onDay.online - oldCfg.onDay.online
+        cfg.myWeekOnline[today] = curCfg.onDay.online + session.online - session.online
     end
 
-    oldCfg = deepcopy(cfg)
     return inicfg.save(cfg, 'TimerOnline.ini')
 end
 
 function onScriptTerminate(script, quitGame)
     if script == thisScript() and not restart then
-        loadAndSave(true)
+        loadAndSave(true, true)
     end
 end
 
@@ -732,9 +729,9 @@ function getStrDate(unixTime)
 end
 
 function get_clock(time)
-    if time < 0 then
-        time = 0
-    end
+    --if time < 0 then
+    --    time = 0
+    --end
     local timezone_offset = 86400 - os.date('%H', 0) * 3600
     if tonumber(time) >= 86400 then
         onDay = true
