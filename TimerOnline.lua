@@ -1,6 +1,6 @@
 -- https://github.com/qrlk/timeronline.lua - slighty improved version
 script_author('Cosmo', 'qrlk')
-script_version("26.06.2022")
+script_version("29.06.2022")
 script_description('ShitCode Prodakshen')
 local imgui = require 'imgui'
 local inicfg = require 'inicfg'
