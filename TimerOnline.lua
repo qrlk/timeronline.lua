@@ -77,8 +77,13 @@ local cfg = inicfg.load({
         round = 10.0,
         colorW = 4279834905,
         colorT = 4286677377
+    },
+    misc = {
+        restart = 5,
     }
 }, "TimerOnline")
+
+local new_restart_hour = cfg.misc.restart
 
 function deepcopy(orig)
     local orig_type = type(orig)
@@ -123,6 +128,8 @@ local weekOffline = imgui.ImInt(cfg.onWeek.offline)
 local allFull = imgui.ImInt(cfg.onAll.full)
 local allOffline = imgui.ImInt(cfg.onAll.offline)
 local sRound = imgui.ImFloat(cfg.style.round)
+
+local restartHour = imgui.ImInt(cfg.misc.restart)
 
 local argbW = cfg.style.colorW
 local argbT = cfg.style.colorT
@@ -183,7 +190,7 @@ function main()
         thisScript():unload()
     end
 
-    loadAndSave()
+    loadAndSave(true)
 
     sampRegisterChatCommand('toset', function()
         settings.v = not settings.v
@@ -441,7 +448,7 @@ function imgui.OnDrawFrame()
         imgui.BeginChild('##Customisation', imgui.ImVec2(-1, 245), true)
         if imgui.Checkbox(u8('##State'), to) then
             cfg.statTimers.state = to.v
-            loadAndSave()
+            loadAndSave(true)
         end
         imgui.SameLine()
         if to.v then
@@ -463,7 +470,7 @@ function imgui.OnDrawFrame()
                         cfg.pos.x, cfg.pos.y = posX, posY
                         checkCursor = false
                         settings.v = true
-                        if loadAndSave() then
+                        if loadAndSave(true) then
                             sampAddChatMessage(tag .. 'Позиция сохранена!', mcx)
                         end
                     end
@@ -490,6 +497,12 @@ function imgui.OnDrawFrame()
         end
         imgui.PopItemWidth()
 
+        imgui.PushItemWidth(-1)
+        if imgui.SliderInt(u8 "Начало дня: %d", restartHour, 0, 24, u8 "Начало дня (рестарт): %.0f") then
+            new_restart_hour = restartHour.v
+        end
+        imgui.PopItemWidth()
+
         if imgui.ColorEdit4(u8 'Цвет фона', colorW, imgui.ColorEditFlags.NoInputs) then
             argbW = imgui.ImColor.FromFloat4(colorW.v[1], colorW.v[2], colorW.v[3], colorW.v[4]):GetU32()
             cfg.style.colorW = argbW
@@ -511,9 +524,18 @@ function imgui.OnDrawFrame()
 
         imgui.EndChild()
         if imgui.Button(u8 'Сохранить и закрыть', imgui.ImVec2(-1, 20)) then
-            if loadAndSave() then
-                sampAddChatMessage(tag .. 'Настройки сохранены!', mcx)
+            if cfg.misc.restart ~= new_restart_hour then
+                cfg.misc.restart = new_restart_hour
+                restart = true
+                loadAndSave()
+                sampAddChatMessage(tag .. 'Настройки сохранены, скрипт перезапущен!', mcx)
                 settings.v = false
+                thisScript():reload()
+            else
+                if loadAndSave(true) then
+                    sampAddChatMessage(tag .. 'Настройки сохранены!', mcx)
+                    settings.v = false
+                end
             end
         end
         imgui.End()
@@ -557,9 +579,9 @@ function se.onConnectionRequestAccepted()
 end
 
 function se.onUpdateScoresAndPings()
-	if not connected then
-		connected = true
-	end
+    if not connected then
+        connected = true
+    end
 end
 
 function se.onConnectionClosed()
@@ -627,11 +649,11 @@ end
 function autoSave()
     while true do
         wait(60000) -- сохранение каждые 60 секунд
-        loadAndSave()
+        loadAndSave(true)
     end
 end
 
-function loadAndSave()
+function loadAndSave(check)
     local curCfg = inicfg.load({}, "TimerOnline")
 
     cfg.onDay.online = curCfg.onDay.online + cfg.onDay.online - oldCfg.onDay.online
@@ -652,26 +674,27 @@ function loadAndSave()
     cfg.onAll.full = curCfg.onAll.full + cfg.onAll.full - oldCfg.onAll.full
     cfg.onAll.notFocused = curCfg.onAll.notFocused + cfg.onAll.notFocused - oldCfg.onAll.notFocused
 
-    if cfg.onDay.today ~= os.date("%a") and tonumber(os.date("%H")) >= 5 then
-        cfg.onDay.today = os.date("%a")
+    if check and cfg.onDay.today ~= os.date("%x") and tonumber(os.date("%H")) >= cfg.misc.restart then
+        cfg.onDay.today = os.date("%x")
         cfg.onDay.online = 0
         cfg.onDay.offline = 0
         cfg.onDay.notFocused = 0
         cfg.onDay.full = 0
         cfg.onDay.afk = 0
         dayFull.v = 0
-    end
-
-    if cfg.onWeek.week ~= number_week() and tonumber(os.date("%H")) >= 5 then
-        cfg.onWeek.week = number_week()
-        cfg.onWeek.online = 0
-        cfg.onWeek.offline = 0
-        cfg.onWeek.notFocused = 0
-        cfg.onWeek.full = 0
-        cfg.onWeek.afk = 0
-        weekFull.v = 0
-        for _, v in pairs(cfg.myWeekOnline) do
-            v = 0
+        dayOffline.v = 0
+        if cfg.onWeek.week ~= number_week() then
+            cfg.onWeek.week = number_week()
+            cfg.onWeek.online = 0
+            cfg.onWeek.offline = 0
+            cfg.onWeek.notFocused = 0
+            cfg.onWeek.full = 0
+            cfg.onWeek.afk = 0
+            weekFull.v = 0
+            weekOffline.v = 0
+            for _, v in pairs(cfg.myWeekOnline) do
+                v = 0
+            end
         end
     end
 
@@ -688,7 +711,7 @@ end
 
 function onScriptTerminate(script, quitGame)
     if script == thisScript() and not restart then
-        loadAndSave()
+        loadAndSave(true)
     end
 end
 
